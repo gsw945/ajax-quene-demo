@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+</head>
+<body>
+    <div id="demo-panel"></div>
+    <h1 />
+    <script type="text/javascript" src="/static/jquery/jquery.min.js"></script>
+    <script type="text/javascript">
+        /**
+         * 可支持传入多个排序规则
+         * 用法:
+         * var arr = [
+         *     {id: 1, name: 'hello'},
+         *     {id: 2, name: 'world'},
+         *     {id: 2, name: 'hehe'}
+         * ];
+         * arr.sort(sort_operator('id desc', 'index asc'));
+         * console.log(arr);
+         */
+        function sort_operator() {
+            /**
+             * from: https://stackoverflow.com/questions/11379361/how-to-sort-an-array-of-objects-with-multiple-field-values-in-javascript/11379791#11379791
+             * Base function returning -1,1,0 for custom sorting
+             */
+            var props = [];
+            /*Let's separate property name from ascendant or descendant keyword*/
+            for (var i = 0; i < arguments.length; i++) {
+                var splittedArg = arguments[i].split(/ +/);
+                props[props.length] = [splittedArg[0], (splittedArg[1] ? splittedArg[1].toUpperCase() : "ASC")];
+            }
+
+            function dynamicSort(property, isAscDesc) {
+                return function(obj1, obj2) {
+                    if (isAscDesc === "DESC") {
+                        return ((obj1[property] > obj2[property]) ? (-1) : ((obj1[property] < obj2[property]) ? (1) : (0)));
+                    }
+                    /*else, if isAscDesc==="ASC"*/
+                    return ((obj1[property] > obj2[property]) ? (1) : ((obj1[property] < obj2[property]) ? (-1) : (0)));
+                }
+            }
+            return function(obj1, obj2) {
+                var i = 0,
+                    result = 0,
+                    numberOfProperties = props.length;
+                /*Cycle on values until find a difference!*/
+                while (result === 0 && i < numberOfProperties) {
+                    result = dynamicSort(props[i][0], props[i][1])(obj1, obj2);
+                    i++;
+                }
+                return result;
+            };
+        }
+
+        window.gsw945AsyncAjaxQuene = [];
+        window.gsw945AsyncAjaxCompleted = false;
+        
+        $.ajaxSetup({
+            cache: true,
+            global: false,
+            async: true,
+            ifModified: true,
+            statusCode: {
+                500: function() {
+                    console.log(arguments);
+                }
+            },
+            beforeSend: function(xhr, settings) {
+                console.log(settings);
+            },
+            complete: function(xhr, status) {
+                // console.log(status);
+            }
+        });
+
+        function startIntervalUpdate() {
+            setInterval(function() {
+                window.gsw945AsyncAjaxQuene.sort(sort_operator('weight asc', 'next_time asc'));
+                if(window.gsw945AsyncAjaxCompleted) {
+                    if(window.gsw945AsyncAjaxQuene.length > 0) {
+                        var first_next_time = window.gsw945AsyncAjaxQuene[0]['next_time'];
+                        console.log(first_next_time, '->', (new Date()).getTime());
+                        if( (new Date()).getTime() >= first_next_time) {
+                            var quene_item = window.gsw945AsyncAjaxQuene.shift();
+                            var ajax_item = $.extend({}, quene_item, true);
+                            ///////////////////////////////////////
+                            var ajax_options = $.extend({}, ajax_item['ajax_options'], true);
+                            var local_scope = ajax_item['local_scope'];
+                            ajax_options['success'] = function(resp) {
+                                var scope_success = ajax_options['scope_success']
+                                scope_success(resp, local_scope);
+                            };
+                            ajax_options['complete'] = function(xhr, status) {
+                                window.gsw945AsyncAjaxCompleted = true;
+                                quene_item['next_time'] = quene_item['next_time'] + quene_item['interval'];
+                                window.gsw945AsyncAjaxQuene.push(quene_item);
+                            };
+                            window.gsw945AsyncAjaxCompleted = false;
+                            $.ajax(ajax_options);
+                            ///////////////////////////////////////
+                        }
+                    }
+                }
+            }, 1200);
+        }
+    </script>
+    <!-- <script type="text/javascript" src="/static/demo.js"></script> -->
+    <script type="text/javascript">
+        startIntervalUpdate();
+        setTimeout(function() {
+            window.gsw945AsyncAjaxQuene.push({
+                ajax_options: {
+                    'url': '/ajax',
+                    'type': 'POST',
+                    'dataType': 'json',
+                    scope_success: function(resp, local_scope) {
+                        if(resp.error == 0) {
+                            console.log(local_scope['hello'], resp.data);
+                        }
+                    },
+                },
+                interval: 1000 * 15, // 3s
+                next_time: (new Date()).getTime() + 1000 * 3,
+                weight: 5,
+                local_scope: {
+                    'hello': 'Python'
+                }
+            });
+            window.gsw945AsyncAjaxCompleted = true;
+        }, 1945);
+    </script>
+</body>
+</html>
